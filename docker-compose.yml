@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  service-java:
+    build: ./service-java
+    ports:
+      - "8080:8080"
+    environment:
+      - FLASK_URL=http://service-python:5000
+    depends_on:
+      - service-python
+
+  service-python:
+    build: ./service-python
+    ports:
+      - "5000:5000"
