@@ -5,31 +5,32 @@ stages:
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
 
-# Job pour compiler le service Java
+# Job de compilation du service Java
 build-java:
   stage: build
   image: maven:3.9-eclipse-temurin-17
   script:
+    - cd service-java
     - mvn -B clean package -DskipTests
-  working_directory: service-java
   artifacts:
     paths:
       - service-java/target/
 
-# Job pour tester le service Java
+# Job de test du service Java
 test-java:
   stage: test
   image: maven:3.9-eclipse-temurin-17
   script:
+    - cd service-java
     - mvn test
-  working_directory: service-java
 
-# Job pour tester le service Python
+# Job de test du service Python
 test-python:
   stage: test
   image: python:3.11-slim
   before_script:
+    - cd service-python
     - pip install -r requirements.txt
   script:
     - python test_app.py
-  working_directory: service-python
+
