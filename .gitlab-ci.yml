@@ -1,36 +1,135 @@
+# The pipeline will first compile the applications, then execute the tests
 stages:
   - build
   - test
+  - terraform-apply
+  - build-docker
+  - terraform-destroy
 
 variables:
-  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+  ACR_URL: "${ACR_NAME}.azurecr.io"
+  MAVEN_REPO_LOCAL: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
 
-# Job de compilation du service Java
-build-java:
+# Cache configuration to speed up future pipeline runs
+cache:
+  key: 
+    files:  # If those files change, then we have to update our cache
+      - service-java/pom.xml
+      - service-python/requirements.txt
+  paths:
+    - .m2/repository/
+    - ~/.cache/pip/
+
+# Job to compile the Java application
+java-build:
   stage: build
-  image: maven:3.9-eclipse-temurin-17
-  script:
+  image: maven:3.9.9-eclipse-temurin-17-alpine
+  before_script:
     - cd service-java
-    - mvn -B clean package -DskipTests
+  script:
+  - mvn compile -DskipTests $MAVEN_REPO_LOCAL # Compiles Java code without running tests
   artifacts:
     paths:
-      - service-java/target/
+      - service-java/target/  # Saves compiled files for the test job
+    expire_in: 1h
 
-# Job de test du service Java
-test-java:
+java-test:
   stage: test
-  image: maven:3.9-eclipse-temurin-17
-  script:
+  image: maven:3.9.9-eclipse-temurin-17-alpine
+  before_script:
     - cd service-java
-    - mvn test
+  script:
+    - mvn test $MAVEN_REPO_LOCAL  # Running tests using local Maven cache
+  dependencies:
+    - java-build
 
-# Job de test du service Python
-test-python:
-  stage: test
-  image: python:3.11-slim
+# Job pour installer les dépendances Python
+python-build:
+  stage: build
+  image: python:3.10-alpine
   before_script:
     - cd service-python
+    - python -m venv .venv  # Crée un environnement virtuel
+    - source .venv/bin/activate
+  script:
+    - pip install --upgrade pip
     - pip install -r requirements.txt
+  artifacts:
+    paths:
+      - service-python/.venv/
+    expire_in: 1h
+
+# Job pour exécuter les tests
+python-test:
+  stage: test
+  image: python:3.10-alpine
+  dependencies:
+    - python-build  # Le job python-test dépend de python-build pour l'environnement virtuel
+  before_script:
+    - cd service-python
+    - source .venv/bin/activate  # Active l'environnement virtuel sauvegardé dans les artifacts
   script:
     - python test_app.py
 
+
+terraform-apply:
+  stage: terraform-apply
+  image:
+    name: hashicorp/terraform:1.5.7
+    entrypoint: [""]
+  before_script:
+    - cd terraform
+    - chmod -R +x .terraform
+  script:
+    - terraform init
+    - terraform apply -auto-approve
+  dependencies: []
+
+
+docker-build-java:
+  stage: build-docker
+  image: docker:20.10.16
+  services:
+    - name: docker:20.10.16-dind
+  variables:
+    #DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_TLS_CERTDIR: ""  # <-- Désactive TLS entre le job et le daemon
+    DOCKER_HOST: tcp://docker:2375  # <-- Connexion explicite au daemon Docker
+  before_script:
+    - apk add --no-cache py3-pip gcc musl-dev python3-dev libffi-dev openssl-dev cargo make
+    - pip install azure-cli
+    - az login --service-principal -u "$ARM_CLIENT_ID" -p "$ARM_CLIENT_SECRET" --tenant "$ARM_TENANT_ID"
+    - az acr login --name "$ACR_NAME"
+
+  script:
+    - docker build -t $ACR_URL/$TF_VAR_docker_image_name_java:latest ./service-java
+    - docker push $ACR_URL/$TF_VAR_docker_image_name_java:latest
+  dependencies: []
+
+docker-build-python:
+  stage: build-docker
+  image: docker:20.10.16
+  services:
+    - name: docker:20.10.16-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  before_script:
+    - apk add --no-cache py3-pip gcc musl-dev python3-dev libffi-dev openssl-dev cargo make
+    - pip install azure-cli
+    - az login --service-principal -u "$ARM_CLIENT_ID" -p "$ARM_CLIENT_SECRET" --tenant "$ARM_TENANT_ID"
+    - az acr login --name "$ACR_NAME"
+
+  script:
+    - docker build -t $ACR_URL/$TF_VAR_docker_image_name_python:latest ./service-python
+    - docker push $ACR_URL/$TF_VAR_docker_image_name_python:latest
+  dependencies: []
+    
+terraform-destroy:
+  stage: terraform-destroy
+  image: mcr.microsoft.com/azure-cli
+  before_script:
+    - az login --service-principal -u "$ARM_CLIENT_ID" -p "$ARM_CLIENT_SECRET" --tenant "$ARM_TENANT_ID"
+  script:
+    - az group delete --name $TF_VAR_resource_group_name --yes
+  when: manual
+  dependencies: []
