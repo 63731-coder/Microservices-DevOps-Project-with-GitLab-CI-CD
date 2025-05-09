@@ -65,6 +65,22 @@ test-springboot:
 # 🚀 DEPLOY TO AZURE
 #######################
 
+terraform-apply:
+  stage: deploy
+  image:
+    name: hashicorp/terraform:1.7.5
+    entrypoint: [""]
+  before_script:
+    - cd infrastructure
+  script:
+    - terraform init
+    - terraform validate
+    - terraform plan -out=tfplan
+    - terraform apply -auto-approve tfplan
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+
 deploy:
   stage: deploy
   image: docker:20.10.16
