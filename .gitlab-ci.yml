@@ -41,11 +41,13 @@ build-springboot:
 test-flask:
   stage: test
   image: mcr.microsoft.com/devcontainers/python:0-3.11
-  script:
+  before_script:
+    - apk add --no-cache gcc musl-dev linux-headers  # 👈 obligatoire pour compiler psutil
     - cd service-python
     - pip install -r requirements.txt
+  script:
     - python -m unittest test_app.py
-    - echo "✅ Flask tests completed."
+    - echo "Flask tests completed."
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
 
