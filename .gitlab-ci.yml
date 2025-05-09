@@ -3,75 +3,78 @@ stages:
   - test
   - deploy
 
+# 🔧 Build Flask
 build-flask:
   stage: build
-  image: python:3.10-slim
+  image: mcr.microsoft.com/devcontainers/python:0-3.11
   script:
-    - cd microservices/service-python-main
+    - cd service-python
     - pip install -r requirements.txt
     - echo "Flask service built."
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
 
+# 🔧 Build Spring Boot
 build-springboot:
   stage: build
   image: maven:3.9.3-eclipse-temurin-17
   script:
-    - cd microservices/service-java-main
+    - cd service-java
     - mvn clean install
     - echo "Spring Boot service built."
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
 
+# 🧪 Test Flask
 test-flask:
   stage: test
-  image: python:3.10-slim
+  image: mcr.microsoft.com/devcontainers/python:0-3.11
   script:
-    - cd microservices/service-python-main
+    - cd service-python
     - pip install -r requirements.txt
     - python -m unittest test_app.py
     - echo "Flask tests completed."
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
 
+# 🧪 Test Spring Boot
 test-springboot:
   stage: test
   image: maven:3.9.3-eclipse-temurin-17
   script:
-    - cd microservices/service-java-main
+    - cd service-java
     - mvn test
     - echo "Spring Boot tests completed."
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
 
+# 🚀 Déploiement complet avec Azure CLI
 deploy:
   stage: deploy
-  image: mcr.microsoft.com/azure-cli:latest # Utilise l'image officielle Azure CLI
+  image: mcr.microsoft.com/azure-cli:latest
   before_script:
-    # Installe Docker dans l'image Azure CLI
     - echo "Installation de Docker..."
     - apt-get update && apt-get install -y docker.io
     - service docker start
-
   script:
-    # Authentification Azure avec service principal
+    # 🔐 Authentification Azure
     - echo "Authentification sur Azure..."
-    - az login --service-principal -u $ARM_CLIENT_ID -p $ARM_CLIENT_SECRET --tenant $ARM_TENANT_ID
-    - az account set --subscription $ARM_SUBSCRIPTION_ID
+    - az login --service-principal -u "$ARM_CLIENT_ID" -p "$ARM_CLIENT_SECRET" --tenant "$ARM_TENANT_ID"
+    - az account set --subscription "$ARM_SUBSCRIPTION_ID"
 
-    # Construction et push des images Docker pour Flask et Spring Boot
+    # 🐳 Build & push images
     - echo "Construction des images Docker..."
-    - docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
-    - docker build -t acrmicroservices62098.azurecr.io/flask-api:latest ./microservices/service-python-main
-    - docker build -t acrmicroservices62098.azurecr.io/springboot-api:latest ./microservices/service-java-main
-    - docker push acrmicroservices62098.azurecr.io/flask-api:latest
-    - docker push acrmicroservices62098.azurecr.io/springboot-api:latest
+    - az acr login --name scenarioregistry63731
+    - docker build -t scenarioregistry63731.azurecr.io/63731-service-python:latest ./service-python
+    - docker build -t scenarioregistry63731.azurecr.io/63731-service-java:latest ./service-java
+    - docker push scenarioregistry63731.azurecr.io/63731-service-python:latest
+    - docker push scenarioregistry63731.azurecr.io/63731-service-java:latest
     - echo "Images Docker poussées vers ACR."
 
-    # Déploiement des applications sur Azure App Service
+    # 🚀 Déploiement sur App Services
     - echo "Déploiement des applications sur Azure App Service..."
-    - az webapp config container set --name flask-app-62098 --resource-group rg-microservices --docker-custom-image-name acrmicroservices62098.azurecr.io/flask-api:latest
-    - az webapp config container set --name spring-boot-app-62098 --resource-group rg-microservices --docker-custom-image-name acrmicroservices62098.azurecr.io/springboot-api:latest
+    - az webapp config container set --name mon-app-python-63731 --resource-group rg-microservices-app --docker-custom-image-name scenarioregistry63731.azurecr.io/63731-service-python:latest
+    - az webapp config container set --name mon-app-java-63731 --resource-group rg-microservices-app --docker-custom-image-name scenarioregistry63731.azurecr.io/63731-service-java:latest
     - echo "Déploiement terminé."
 
   rules:
