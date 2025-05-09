@@ -42,7 +42,7 @@ test-flask:
   stage: test
   image: mcr.microsoft.com/devcontainers/python:0-3.11
   before_script:
-    - apk add --no-cache gcc musl-dev linux-headers  # 👈 obligatoire pour compiler psutil
+    - apt-get update && apt-get install -y gcc python3-dev build-essential
     - cd service-python
     - pip install -r requirements.txt
   script:
