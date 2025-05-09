@@ -92,7 +92,9 @@ docker-build-java:
   services:
     - name: docker:20.10.16-dind
   variables:
-    DOCKER_TLS_CERTDIR: "/certs"
+    #DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_TLS_CERTDIR: ""  # <-- Désactive TLS entre le job et le daemon
+    DOCKER_HOST: tcp://docker:2375  # <-- Connexion explicite au daemon Docker
   before_script:
     - apk add --no-cache py3-pip gcc musl-dev python3-dev libffi-dev openssl-dev cargo make
     - pip install azure-cli
