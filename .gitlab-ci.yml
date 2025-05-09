@@ -79,6 +79,7 @@ terraform-apply:
     entrypoint: [""]
   before_script:
     - cd terraform
+    - chmod -R +x .terraform
   script:
     - terraform init
     - terraform apply -auto-approve
