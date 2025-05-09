@@ -1,96 +1,78 @@
 stages:
   - build
   - test
-  - infrastructure
   - deploy
 
-variables:
-  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
-  DOCKER_DRIVER: overlay2
-  ACR_NAME: scenarioregistry63731
-  ACR_LOGIN_SERVER: scenarioregistry63731.azurecr.io
-  IMAGE_PYTHON: "$ACR_LOGIN_SERVER/63731-service-python:latest"
-  IMAGE_JAVA: "$ACR_LOGIN_SERVER/63731-service-java:latest"
-
-#######################
-# 📦 BUILD SERVICES
-#######################
-
-build-java:
+build-flask:
   stage: build
-  image: maven:3.9-eclipse-temurin-17
+  image: python:3.10-slim
   script:
-    - cd service-java
-    - mvn clean package -DskipTests
-  artifacts:
-    paths:
-      - service-java/target/
-
-build-python:
-  stage: build
-  image: gitlab-local/python:3.11-slim
-  script:
-    - cd service-python
+    - cd microservices/service-python-main
     - pip install -r requirements.txt
-  artifacts:
-    paths:
-      - service-python/
-    expire_in: 1h
+    - echo "Flask service built."
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
 
-#######################
-# ✅ TEST SERVICES
-#######################
-
-test-java:
-  stage: test
-  image: maven:3.9-eclipse-temurin-17
+build-springboot:
+  stage: build
+  image: maven:3.9.3-eclipse-temurin-17
   script:
-    - cd service-java
+    - cd microservices/service-java-main
+    - mvn clean install
+    - echo "Spring Boot service built."
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+test-flask:
+  stage: test
+  image: python:3.10-slim
+  script:
+    - cd microservices/service-python-main
+    - pip install -r requirements.txt
+    - python -m unittest test_app.py
+    - echo "Flask tests completed."
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+test-springboot:
+  stage: test
+  image: maven:3.9.3-eclipse-temurin-17
+  script:
+    - cd microservices/service-java-main
     - mvn test
-
-test-python:
-  stage: test
-  image: gitlab-local/python:3.11-slim
-  script:
-    - cd service-python
-    - pip install -r requirements.txt
-    - python test_app.py
-
-#######################
-# ☁️ TERRAFORM INFRA
-#######################
-
-infrastructure:
-  stage: infrastructure
-  image:
-    name: hashicorp/terraform:1.3.9
-    entrypoint: [""]
-  script:
-    - cd terraform
-    - terraform init
-    - terraform apply -auto-approve
-
-#######################
-# 🚀 DEPLOY TO AZURE
-#######################
+    - echo "Spring Boot tests completed."
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
 
 deploy:
   stage: deploy
-  image: docker:20.10.16
-  services:
-    - docker:20.10.16-dind
+  image: mcr.microsoft.com/azure-cli:latest # Utilise l'image officielle Azure CLI
   before_script:
-    - apk add --no-cache bash curl jq python3 py3-pip
-    - pip install azure-cli
-    - az login --service-principal -u "$ARM_CLIENT_ID" -p "$ARM_CLIENT_SECRET" --tenant "$ARM_TENANT_ID"
-  script:
-    # 🔧 Build & Push
-    - docker build -t $IMAGE_PYTHON ./service-python
-    - docker build -t $IMAGE_JAVA ./service-java
-    - az acr login --name $ACR_NAME
-    - docker push $IMAGE_PYTHON
-    - docker push $IMAGE_JAVA
+    # Installe Docker dans l'image Azure CLI
+    - echo "Installation de Docker..."
+    - apt-get update && apt-get install -y docker.io
+    - service docker start
 
-    # 🔄 Restart Web Apps
-    - az webapp restart --name mon-app-python-63731 --resource-group rg-microservices-app
-    - az webapp restart --name mon-app-java-63731 --resource-group rg-microservices-app
+  script:
+    # Authentification Azure avec service principal
+    - echo "Authentification sur Azure..."
+    - az login --service-principal -u $ARM_CLIENT_ID -p $ARM_CLIENT_SECRET --tenant $ARM_TENANT_ID
+    - az account set --subscription $ARM_SUBSCRIPTION_ID
+
+    # Construction et push des images Docker pour Flask et Spring Boot
+    - echo "Construction des images Docker..."
+    - docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+    - docker build -t acrmicroservices62098.azurecr.io/flask-api:latest ./microservices/service-python-main
+    - docker build -t acrmicroservices62098.azurecr.io/springboot-api:latest ./microservices/service-java-main
+    - docker push acrmicroservices62098.azurecr.io/flask-api:latest
+    - docker push acrmicroservices62098.azurecr.io/springboot-api:latest
+    - echo "Images Docker poussées vers ACR."
+
+    # Déploiement des applications sur Azure App Service
+    - echo "Déploiement des applications sur Azure App Service..."
+    - az webapp config container set --name flask-app-62098 --resource-group rg-microservices --docker-custom-image-name acrmicroservices62098.azurecr.io/flask-api:latest
+    - az webapp config container set --name spring-boot-app-62098 --resource-group rg-microservices --docker-custom-image-name acrmicroservices62098.azurecr.io/springboot-api:latest
+    - echo "Déploiement terminé."
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
