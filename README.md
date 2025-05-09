@@ -1,5 +1,5 @@
-# Scénario DevOps – Microservices + CI/CD
-63731 - D112
+# Scénario DevOps
+63731 - D112 - Opre Nicoleta
 ---
 
 Ce projet DevOps contient deux microservices conteneurisés avec Docker, et un pipeline CI/CD configuré avec GitLab.
