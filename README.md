@@ -59,15 +59,15 @@ Un **runner local Docker sous WSL** est utilisé pour exécuter les jobs CI/CD s
 - **Objectif** : vérifier que chaque microservice est compilable, testable, et prêt à être déployé.
 
 
-## ☁️ Infrastructure Cloud – Azure avec Terraform (Partie 3)
+## Infrastructure Cloud – Azure avec Terraform (Partie 3)
 
-### 🎯 Objectif
+### Objectif
 
 Déployer l'infrastructure nécessaire sur **Microsoft Azure** pour héberger les deux microservices conteneurisés (Java Spring Boot et Python Flask) à l'aide de **Terraform**.
 
 ---
 
-### 📦 Ressources Azure créées automatiquement
+### Ressources Azure créées automatiquement
 
 La configuration Terraform déployée dans le dossier `terraform/` permet de créer les ressources suivantes sur Azure :
 
@@ -82,7 +82,7 @@ La configuration Terraform déployée dans le dossier `terraform/` permet de cr�
 
 ---
 
-### 🧩 Structure des fichiers Terraform
+### Structure des fichiers Terraform
 
 | Fichier              | Rôle                                                                 |
 |----------------------|----------------------------------------------------------------------|
@@ -93,15 +93,15 @@ La configuration Terraform déployée dans le dossier `terraform/` permet de cr�
 
 ---
 
-### 🚀 Déploiement manuel avec Terraform
+### Déploiement manuel avec Terraform
 
-#### 📂 Pré-requis
+#### Pré-requis
 
 - Terraform ≥ 1.3
 - Azure CLI (`az login`)
 - Images Docker préalablement **poussées** sur ACR (`docker push`)
 
-#### ✅ Étapes
+#### Étapes
 
 1. Initialiser le projet Terraform :
 
@@ -158,3 +158,19 @@ Sinon :
    Service Flask injoignable !
     
   ```
+
+
+
+## Déploiement Continu – GitLab CI + Azure CLI (Partie 4)
+### Objectif
+Automatiser le déploiement des images Docker sur Azure App Service après compilation, à l’aide d’un runner GitLab configuré avec Docker-in-Docker et Azure CLI.
+
+```
+[runners.docker]
+  image = "alpine:latest"
+  privileged = true
+  volumes = ["/cache"]...
+  ```
+
+privileged = true est indispensable pour lancer un docker:dind (Docker-in-Docker).
+
