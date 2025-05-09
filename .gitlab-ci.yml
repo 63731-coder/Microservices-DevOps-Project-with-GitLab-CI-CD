@@ -75,7 +75,7 @@ terraform-apply:
   script:
     - terraform init
     - chmod +x .terraform/providers/registry.terraform.io/hashicorp/azurerm/*/*/terraform-provider-azurerm*
-    - terraform apply 
+    - terraform apply -auto-approve 
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
 
