@@ -57,3 +57,104 @@ Un **runner local Docker sous WSL** est utilisé pour exécuter les jobs CI/CD s
   - `maven:3.9-eclipse-temurin-17` pour Java
   - `python:3.11-slim` pour Flask
 - **Objectif** : vérifier que chaque microservice est compilable, testable, et prêt à être déployé.
+
+
+## ☁️ Infrastructure Cloud – Azure avec Terraform (Partie 3)
+
+### 🎯 Objectif
+
+Déployer l'infrastructure nécessaire sur **Microsoft Azure** pour héberger les deux microservices conteneurisés (Java Spring Boot et Python Flask) à l'aide de **Terraform**.
+
+---
+
+### 📦 Ressources Azure créées automatiquement
+
+La configuration Terraform déployée dans le dossier `terraform/` permet de créer les ressources suivantes sur Azure :
+
+| Ressource                          | Description                                                                 |
+|-----------------------------------|-----------------------------------------------------------------------------|
+| `azurerm_resource_group`          | Groupe de ressources nommé `rg-microservices-app`                          |
+| `azurerm_container_registry`      | Registre privé ACR `scenarioregistry63731` pour stocker les images Docker |
+| `azurerm_user_assigned_identity`  | Identité managée pour les Web Apps Azure                                   |
+| `azurerm_role_assignment`         | Attribution du rôle `AcrPull` à l'identité pour accéder à l’ACR            |
+| `azurerm_service_plan`            | Plan App Service Linux (B1) utilisé par les Web Apps                       |
+| `azurerm_linux_web_app` (x2)      | Deux Web Apps pour exécuter les conteneurs Docker des services             |
+
+---
+
+### 🧩 Structure des fichiers Terraform
+
+| Fichier              | Rôle                                                                 |
+|----------------------|----------------------------------------------------------------------|
+| `main.tf`            | Définition des ressources Azure                                      |
+| `variables.tf`       | Variables personnalisables (noms, ports, images, credentials)        |
+| `providers.tf`       | Configuration du provider Azure avec service principal               |
+| `outputs.tf`         | Affiche les URLs finales des applications après déploiement          |
+
+---
+
+### 🚀 Déploiement manuel avec Terraform
+
+#### 📂 Pré-requis
+
+- Terraform ≥ 1.3
+- Azure CLI (`az login`)
+- Images Docker préalablement **poussées** sur ACR (`docker push`)
+
+#### ✅ Étapes
+
+1. Initialiser le projet Terraform :
+
+   ```bash
+   cd terraform/
+   terraform init
+
+2. Importer les ressources déjà existantes si nécessaire :
+
+   ```bash
+   terraform import azurerm_resource_group.rg /subscriptions/xxx/resourceGroups/rg-microservices-app
+    terraform import azurerm_container_registry.acr /subscriptions/xxx/resourceGroups/rg-microservices-app/providers/Microsoft.ContainerRegistry/registries/scenarioregistry63731
+    terraform import azurerm_user_assigned_identity.identity /subscriptions/xxx/resourceGroups/rg-microservices-app/providers/Microsoft.ManagedIdentity/userAssignedIdentities/container-app-identity
+
+3. Vérifier le plan :
+
+   ```bash
+   terraform plan
+
+4. Appliquer le déploiement :
+
+   ```bash
+   terraform apply
+
+Le script déploiera automatiquement les 2 services sur Azure App Service, en important leurs images depuis l’ACR.
+
+## Vérification post-déploiement
+Accès au service Flask :
+
+  ```bash
+   https://mon-app-python-63731.azurewebsites.net/api/message 
+  ```
+   
+
+Doit afficher :
+  ```bash
+  Hello from Flask!
+```
+Accès au service Flask :
+
+  ```bash
+   https://mon-app-java-63731.azurewebsites.net/proxy
+    
+  ```
+   
+
+Doit afficher :
+  ```bash
+  Hello from Flask!
+```
+
+Sinon :
+```bash
+   Service Flask injoignable !
+    
+  ```
