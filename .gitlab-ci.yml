@@ -71,7 +71,7 @@ terraform-apply:
     name: hashicorp/terraform:1.7.5
     entrypoint: [""]
   before_script:
-    - cd infrastructure
+    - cd terraform
   script:
     - terraform init
     - terraform validate
