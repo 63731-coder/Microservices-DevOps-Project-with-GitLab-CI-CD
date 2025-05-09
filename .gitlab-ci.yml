@@ -1,22 +1,46 @@
 stages:
   - build
   - test
+  - infrastructure
+  - deploy
 
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+  DOCKER_DRIVER: overlay2
+  ACR_NAME: scenarioregistry63731
+  ACR_LOGIN_SERVER: scenarioregistry63731.azurecr.io
+  IMAGE_PYTHON: "$ACR_LOGIN_SERVER/63731-service-python:latest"
+  IMAGE_JAVA: "$ACR_LOGIN_SERVER/63731-service-java:latest"
 
-# Job de compilation du service Java
+#######################
+# 📦 BUILD SERVICES
+#######################
+
 build-java:
   stage: build
   image: maven:3.9-eclipse-temurin-17
   script:
     - cd service-java
-    - mvn -B clean package -DskipTests
+    - mvn clean package -DskipTests
   artifacts:
     paths:
       - service-java/target/
 
-# Job de test du service Java
+build-python:
+  stage: build
+  image: python:3.11-slim
+  script:
+    - cd service-python
+    - pip install -r requirements.txt
+  artifacts:
+    paths:
+      - service-python/
+    expire_in: 1h
+
+#######################
+# ✅ TEST SERVICES
+#######################
+
 test-java:
   stage: test
   image: maven:3.9-eclipse-temurin-17
@@ -24,13 +48,49 @@ test-java:
     - cd service-java
     - mvn test
 
-# Job de test du service Python
 test-python:
   stage: test
   image: python:3.11-slim
-  before_script:
+  script:
     - cd service-python
     - pip install -r requirements.txt
-  script:
     - python test_app.py
 
+#######################
+# ☁️ TERRAFORM INFRA
+#######################
+
+infrastructure:
+  stage: infrastructure
+  image:
+    name: hashicorp/terraform:1.3.9
+    entrypoint: [""]
+  script:
+    - cd terraform
+    - terraform init
+    - terraform apply -auto-approve
+
+#######################
+# 🚀 DEPLOY TO AZURE
+#######################
+
+deploy:
+  stage: deploy
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  before_script:
+    - apk add --no-cache bash curl jq python3 py3-pip
+    - pip install azure-cli
+    - az login --service-principal -u "$ARM_CLIENT_ID" -p "$ARM_CLIENT_SECRET" --tenant "$ARM_TENANT_ID"
+  script:
+    # 🔧 Build & Push
+    - docker build -t $IMAGE_PYTHON ./service-python
+    - docker build -t $IMAGE_JAVA ./service-java
+    - az acr login --name $ACR_NAME
+    - docker push $IMAGE_PYTHON
+    - docker push $IMAGE_JAVA
+
+    # 🔄 Restart Web Apps
+    - az webapp restart --name mon-app-python-63731 --resource-group rg-microservices-app
+    - az webapp restart --name mon-app-java-63731 --resource-group rg-microservices-app
